@@ -156,7 +156,6 @@ def print_results(printJson, issue):
     commit_time = issue['date']
     branch_name = issue['branch']
     prev_commit = issue['commit']
-    printableDiff = issue['printDiff']
     commitHash = issue['commitHash']
     reason = issue['reason']
     path = issue['path']
@@ -179,13 +178,11 @@ def print_results(printJson, issue):
             print(branchStr)
             commitStr = "{}Commit: {}{}".format(bcolors.OKGREEN, prev_commit, bcolors.ENDC)
             print(commitStr)
-            print(printableDiff)
         else:
             branchStr = "{}Branch: {}{}".format(bcolors.OKGREEN, branch_name.encode('utf-8'), bcolors.ENDC)
             print(branchStr)
             commitStr = "{}Commit: {}{}".format(bcolors.OKGREEN, prev_commit.encode('utf-8'), bcolors.ENDC)
             print(commitStr)
-            print(printableDiff.encode('utf-8'))
         print("~~~~~~~~~~~~~~~~~~~~~")
 
 def find_entropy(printableDiff, commit_time, branch_name, prev_commit, blob, commitHash):
@@ -198,13 +195,17 @@ def find_entropy(printableDiff, commit_time, branch_name, prev_commit, blob, com
             for string in base64_strings:
                 b64Entropy = shannon_entropy(string, BASE64_CHARS)
                 if b64Entropy > 4.5:
-                    stringsFound.append(string)
-                    printableDiff = printableDiff.replace(string, bcolors.WARNING + string + bcolors.ENDC)
+                    if len(string) < 200:
+                        stringsFound.append(string)
+                        printableDiff = printableDiff.replace(string, bcolors.WARNING + string + bcolors.ENDC)
             for string in hex_strings:
                 hexEntropy = shannon_entropy(string, HEX_CHARS)
                 if hexEntropy > 3:
-                    stringsFound.append(string)
-                    printableDiff = printableDiff.replace(string, bcolors.WARNING + string + bcolors.ENDC)
+                    if len(string) < 200:
+                        stringsFound.append(string)
+                        printableDiff = printableDiff.replace(string, bcolors.WARNING + string + bcolors.ENDC)
+        if len(stringsFound) > 100:
+            break
     entropicDiff = None
     if len(stringsFound) > 0:
         entropicDiff = {}
@@ -212,9 +213,7 @@ def find_entropy(printableDiff, commit_time, branch_name, prev_commit, blob, com
         entropicDiff['path'] = blob.b_path if blob.b_path else blob.a_path
         entropicDiff['branch'] = branch_name
         entropicDiff['commit'] = prev_commit.message
-        entropicDiff['diff'] = blob.diff.decode('utf-8', errors='replace')
         entropicDiff['stringsFound'] = stringsFound
-        entropicDiff['printDiff'] = printableDiff
         entropicDiff['commitHash'] = prev_commit.hexsha
         entropicDiff['reason'] = "High Entropy"
     return entropicDiff
@@ -226,18 +225,14 @@ def regex_check(printableDiff, commit_time, branch_name, prev_commit, blob, comm
         secret_regexes = regexes
     regex_matches = []
     for key in secret_regexes:
-        found_strings = secret_regexes[key].findall(printableDiff)
-        for found_string in found_strings:
-            found_diff = printableDiff.replace(printableDiff, bcolors.WARNING + found_string + bcolors.ENDC)
+        found_strings = secret_regexes[key].findall(printableDiff)[:100]
         if found_strings:
             foundRegex = {}
             foundRegex['date'] = commit_time
             foundRegex['path'] = blob.b_path if blob.b_path else blob.a_path
             foundRegex['branch'] = branch_name
             foundRegex['commit'] = prev_commit.message
-            foundRegex['diff'] = blob.diff.decode('utf-8', errors='replace')
             foundRegex['stringsFound'] = found_strings
-            foundRegex['printDiff'] = found_diff
             foundRegex['reason'] = key
             foundRegex['commitHash'] = prev_commit.hexsha
             regex_matches.append(foundRegex)
